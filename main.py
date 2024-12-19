@@ -32,7 +32,7 @@ def to_pi(data):
       count_array = np.zeros(max_val-min_val+1)
       for value in data[ticketer]:
         if min_val <= value <= max_val:
-          count_array[value-min] += 1 
+          count_array[value-min_val] += 1 
         
       p_i = count_array / Days
       result.append(p_i)    
@@ -51,9 +51,9 @@ def to_pij(data):
     counter = np.zeros((elements, elements))
     
     for i in tqdm(range(N)):
-        offset_i = change_ratio_array[i] - min_val
+        offset_i = data[i] - min_val
         for j in range(i, N):
-            offset_j = change_ratio_array[j] - min_val
+            offset_j = data[j] - min_val
             for idx_i, idx_j in zip(offset_i, offset_j):
                 counter[idx_i][idx_j] += 1
 
@@ -133,13 +133,13 @@ def GD_target_fc(P_C_i_temp, T,similarity_matrix):
 def compute_entropy(P_C_i):
     return -np.sum(P_C_i * np.log2(P_C_i)) if np.all(P_C_i > 0) else 0
  
-def GD_train(epoch,N,Nc,T,loss_array = None,lr = 1e-3):
+def GD_train(epoch,N,Nc,T,similarity_matrix,loss_array = None,lr = 1e-3):
     P_C_i = torch.rand(N,Nc,requires_grad=True)
     optimizer = torch.optim.Adam([P_C_i],lr)
 
     for i in range(epoch):
         optimizer.zero_grad()
-        loss = GD_target_fc(P_C_i,T)
+        loss = GD_target_fc(P_C_i,T,similarity_matrix)
         loss.backward()
         optimizer.step()
         print(f"Epoch:{i}, loss:{loss.item()}")
@@ -194,7 +194,7 @@ def iterative_approach_to_cluster(T,similarity_matrix,N,Nc,epsilon = 1e-4):
 def GD_method_to_cluster(T,similarity_matrix,N,Nc,epoch,lr=1e-3):
   similarity_matrix = torch.tensor(similarity_matrix)
   loss_array = []
-  P_C_i = GD_train(epoch,N,Nc,T,loss_array,lr = 1e-3)
+  P_C_i = GD_train(epoch,N,Nc,T,similarity_matrix,loss_array,lr = 1e-3)
   # draw_loss_function(loss_array)
   labels = np.argmax(P_C_i,axis=1)
   return P_C_i.detach().numpy(),labels  
