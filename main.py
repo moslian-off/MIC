@@ -26,10 +26,12 @@ def load_data():
 def to_pi(data):
     N,Days = data.shape
     result = []
+    max_val = np.max(data)
+    min_val = np.min(data)
     for ticketer in tqdm(range(N)):
-      count_array = np.zeros(max-min+1)
+      count_array = np.zeros(max_val-min_val+1)
       for value in data[ticketer]:
-        if min <= value <= max:
+        if min_val <= value <= max_val:
           count_array[value-min] += 1 
         
       p_i = count_array / Days
