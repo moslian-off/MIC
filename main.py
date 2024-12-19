@@ -19,16 +19,16 @@ def load_data():
 
   for i in range(N):
     change_ratio_array.append(np.array(eval(change_ratio_list[i])).astype(int)) 
-    change_ratio_array = np.array(change_ratio_array)
+  change_ratio_array = np.array(change_ratio_array)
 
   return change_ratio_array,category
 
-def to_pi(change_ratio_array):
-    N,Days = change_ratio_array.shape
+def to_pi(data):
+    N,Days = data.shape
     result = []
     for ticketer in tqdm(range(N)):
       count_array = np.zeros(max-min+1)
-      for value in change_ratio_array[ticketer]:
+      for value in data[ticketer]:
         if min <= value <= max:
           count_array[value-min] += 1 
         
@@ -38,10 +38,10 @@ def to_pi(change_ratio_array):
     result[np.where(result <= 0)] = 1e-10
     return np.array(result)
 
-def to_pij(change_ratio_array):
-    N = len(change_ratio_array)
-    min_val = np.min(change_ratio_array)
-    max_val = np.max(change_ratio_array)
+def to_pij(data):
+    N = len(data)
+    min_val = np.min(data)
+    max_val = np.max(data)
     
     result = np.empty((N, N), dtype=object)
     
