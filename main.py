@@ -1,25 +1,24 @@
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 import matplotlib.pyplot as plt
+from scipy.sparse import csr_matrix
+from tqdm import tqdm
 
-df = pd.read_excel("data/TicketData.xlsx")
-N = df.shape[0]
-Days = len(eval(df["ChangeRatioList"][0]))
-name_frame = df["Ticker"]
-category = df["Sector"]
-change_ratio_list = df["ChangeRatioList"]
 
-change_ratio_array = []
-for i in range(N):
-  change_ratio_array.append(np.array(eval(change_ratio_list[i])).astype(int)) 
-change_ratio_array = np.array(change_ratio_array)
+def load_data():
+  df = pd.read_excel("data/TicketData.xlsx")
+  category = df["Sector"]
+  change_ratio_list = df["ChangeRatioList"]
+  change_ratio_array = []
 
-max = np.max(change_ratio_array)
-min = np.min(change_ratio_array)
+  for i in range(N):
+    change_ratio_array.append(np.array(eval(change_ratio_list[i])).astype(int)) 
+    change_ratio_array = np.array(change_ratio_array)
 
+  return change_ratio_array,category
 
 def to_pi(change_ratio_array):
+    N,Days = change_ratio_array.shape
     result = []
     for ticketer in tqdm(range(N)):
       count_array = np.zeros(max-min+1)
@@ -33,17 +32,11 @@ def to_pi(change_ratio_array):
     result[np.where(result <= 0)] = 1e-10
     return np.array(result)
 
-# %%
 x = np.arange(min, max + 1, 1)
 pi = to_pi(change_ratio_array)
 
 plt.bar(x, pi[2], width=0.5 * 0.8, color='skyblue', align='center')
 plt.show()
-
-# %%
-import numpy as np
-from scipy.sparse import csr_matrix
-from tqdm import tqdm
 
 def to_pij(change_ratio_array):
     N = len(change_ratio_array)
