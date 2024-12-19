@@ -83,7 +83,7 @@ def compute_mutual_information_from_possibility(pi, pj, pij):
             pj_array = np.where(pj_array == 0, epsilon, pj_array)
             pij_array = np.where(pij_array == 0, epsilon, pij_array)
 
-            temp_info = np.sum(pij_array * np.log2(pij_array / np.outer(pi_array[:, None] , pj_array[None, :])))
+            temp_info = np.sum(pij_array * np.log(pij_array / np.outer(pi_array[:, None] , pj_array[None, :])))
 
             result[i, j] = temp_info
             if i != j:
@@ -119,19 +119,19 @@ def compute_s_C(P, similarity_matrix, C, N):
       s_C = np.sum(similarity_matrix * np.outer(P_column, P_column)) / norm_factor/(N**2)
     return s_C
 
-def GD_target_fc(P_C_i_temp, T,similarity_matrix):  
-    N, Nc = P_C_i_temp.shape
-    P_C_i = P_C_i_temp/torch.sum(P_C_i_temp,dim = 1,keepdim = True)  
+def GD_target_fc(P_C_i, T,similarity_matrix):  
+    N, Nc = P_C_i.shape
+    P_C_i = torch.softmax(P_C_i,dim=1)  
     P_C = compute_P_C(P_C_i,N)
     s_C = torch.zeros(Nc)
     for i in range(Nc):
       s_C[i] = compute_s_C(P_C_i, similarity_matrix, i,N)
     s_all_clusters = torch.dot(s_C, P_C)
-    info = torch.sum(P_C_i * torch.log2(P_C_i / P_C)) / N
+    info = torch.sum(P_C_i * torch.log(P_C_i / P_C)) / N
     return -s_all_clusters + T * info
 
 def compute_entropy(P_C_i):
-    return -np.sum(P_C_i * np.log2(P_C_i)) if np.all(P_C_i > 0) else 0
+    return -np.sum(P_C_i * np.log(P_C_i)) if np.all(P_C_i > 0) else 0
  
 def GD_train(epoch,N,Nc,T,similarity_matrix,loss_array = None,lr = 1e-3):
     P_C_i = torch.rand(N,Nc,requires_grad=True)
@@ -215,6 +215,17 @@ def evaluate(pred, label, Nc):
             continue
     accuracy = accuracy_score(y_encoded, preds)
     return accuracy
+
+def compute_F(P_C_i,similarity_matrix,T):
+  N,Nc = P_C_i.shape
+  P_C = compute_P_C(P_C_i,N)
+  s_C_array = []  
+  for i in range(Nc):
+    s_C = compute_s_C(P_C_i,similarity_matrix,i,N)
+    s_C_array.append(s_C)
+  s_C = np.array(s_C_array)
+  F = np.sum(P_C*s_C) - T*np.sum(P_C_i * np.log2(P_C_i / P_C)) / N
+  return F
   
 def main():
   data,label = load_data()
@@ -229,6 +240,8 @@ def main():
   acc2 = evaluate(iterative_pred,label,Nc)
   print(acc1)
   print(acc2)
+  print(compute_F(iterative_approach_P_C_i,mutual_info,T_ia))
+  print(compute_F(GD_P_C_i,mutual_info,T_GD))
 
 
 if __name__ == '__main__':
