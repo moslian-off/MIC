@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.sparse import csr_matrix
 from tqdm import tqdm
+import torch
 
 
 def load_data():
@@ -32,12 +33,6 @@ def to_pi(change_ratio_array):
     result[np.where(result <= 0)] = 1e-10
     return np.array(result)
 
-x = np.arange(min, max + 1, 1)
-pi = to_pi(change_ratio_array)
-
-plt.bar(x, pi[2], width=0.5 * 0.8, color='skyblue', align='center')
-plt.show()
-
 def to_pij(change_ratio_array):
     N = len(change_ratio_array)
     min_val = np.min(change_ratio_array)
@@ -66,45 +61,6 @@ def to_pij(change_ratio_array):
     
     return result
 
-
-# %%
-pij = to_pij(change_ratio_array)
-
-# %%
-pearson_matrix = np.corrcoef(change_ratio_array)
-np.savetxt("Pearson_matrix_tickets.txt",pearson_matrix,delimiter=",")
-
-# %%
-import matplotlib.pyplot as plt
-
-plt.figure(figsize=(8, 6))
-plt.imshow(pearson_matrix)
-plt.colorbar()
-plt.savefig('imgs/pearson_matrix_ticket.png')
-
-# %%
-def draw_pij(i,j):
-    pij_array = np.array(csr_matrix.toarray(pij[i,j]))
-    x = np.arange(min, max+1, 1)
-    y = np.arange(min, max+1, 1)
-
-    xpos, ypos = np.meshgrid(x, y)
-    xpos = xpos.flatten()
-    ypos = ypos.flatten()
-
-    zpos = np.zeros_like(xpos) 
-    dx = dy = 0.4 
-    dz = pij_array.flatten()
-
-    fig = plt.figure(figsize=(10, 6))
-    ax = fig.add_subplot(111, projection='3d')
-
-    ax.bar3d(xpos, ypos, zpos, dx, dy, dz, color='skyblue')
-    plt.show()
-
-draw_pij(0,2)
-
-# %%
 def MI(pi, pj, pij):
     N = len(pij)
     result = np.zeros((N, N))
@@ -128,12 +84,6 @@ def MI(pi, pj, pij):
     
     return result
 
-mutual_info = MI(pi, pi, pij)
-
-# %%
-np.savetxt("temp/ticket_sij.csv",mutual_info,delimiter=",")
-
-# %%
 def normalize(mutual_info):
     D = np.diagonal(mutual_info)
     D_prime = 1 / np.sqrt(D)
@@ -141,8 +91,47 @@ def normalize(mutual_info):
     normalized_mutual_info = D_prime_matrix @ mutual_info @ D_prime_matrix
     return normalized_mutual_info
 
-# %%
-mutual_info = normalize(mutual_info)
+def main():
+  change_ratio_array,category = load_data()
+  pi = to_pi(change_ratio_array)
+  pij = to_pij(change_ratio_array)
+  pearson_matrix = np.corrcoef(change_ratio_array)
+  np.savetxt("Pearson_matrix_tickets.txt",pearson_matrix,delimiter=",")
+  mutual_info = MI(pi, pi, pij)
+  mutual_info = normalize(mutual_info)
+
+
+  
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(8, 6))
+plt.imshow(pearson_matrix)
+plt.colorbar()
+plt.savefig('imgs/pearson_matrix_ticket.png')
+
+
+def draw_pij(i,j):
+    pij_array = np.array(csr_matrix.toarray(pij[i,j]))
+    x = np.arange(min, max+1, 1)
+    y = np.arange(min, max+1, 1)
+
+    xpos, ypos = np.meshgrid(x, y)
+    xpos = xpos.flatten()
+    ypos = ypos.flatten()
+
+    zpos = np.zeros_like(xpos) 
+    dx = dy = 0.4 
+    dz = pij_array.flatten()
+
+    fig = plt.figure(figsize=(10, 6))
+    ax = fig.add_subplot(111, projection='3d')
+
+    ax.bar3d(xpos, ypos, zpos, dx, dy, dz, color='skyblue')
+    plt.show()
+
+draw_pij(0,2)
+
+np.savetxt("temp/ticket_sij.csv",mutual_info,delimiter=",")
 
 plt.figure(figsize=(8, 6))
 plt.imshow(mutual_info)
@@ -155,7 +144,6 @@ np.savetxt("temp/normalized_ticket_sij.csv",mutual_info,delimiter=",")
 # #### Gradient Descent Method
 
 # %%
-import torch
 
 # mutual_info = torch.tensor(normalize(pearson_matrix))
 mutual_info = torch.tensor(np.loadtxt("temp/normalized_ticket_sij.csv", delimiter=","))
