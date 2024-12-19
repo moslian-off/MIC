@@ -105,7 +105,7 @@ def normalize(mutual_info):
     return normalized_mutual_info
 
 def compute_P_C(P_C_i,N):
-  if isinstance(P_C_i,torch.tensor):
+  if isinstance(P_C_i,torch.Tensor):
     return torch.sum(P_C_i,dim=0)/N
   return np.sum(P_C_i,axis=0)/N
     
@@ -113,7 +113,7 @@ def compute_s_C(P, similarity_matrix, C, N):
     P_C = compute_P_C(P,N)
     P_column = P[:, C]
     norm_factor = P_C[C] ** 2
-    if isinstance(similarity_matrix,torch.tensor):
+    if isinstance(similarity_matrix,torch.Tensor):
       s_C = torch.sum(similarity_matrix * torch.ger(P_column, P_column)) / norm_factor/(N**2)
     else:
       s_C = np.sum(similarity_matrix * np.outer(P_column, P_column)) / norm_factor/(N**2)
@@ -125,7 +125,7 @@ def GD_target_fc(P_C_i_temp, T,similarity_matrix):
     P_C = compute_P_C(P_C_i,N)
     s_C = torch.zeros(Nc)
     for i in range(Nc):
-      s_C[i] = compute_s_C(P_C_i, similarity_matrix, i)
+      s_C[i] = compute_s_C(P_C_i, similarity_matrix, i,N)
     s_all_clusters = torch.dot(s_C, P_C)
     info = torch.sum(P_C_i * torch.log2(P_C_i / P_C)) / N
     return -s_all_clusters + T * info
@@ -190,23 +190,31 @@ def iterative_approach_soft_clustering(similarity_matrix, T, Nc, epsilon):
 
 def iterative_approach_to_cluster(T,similarity_matrix,N,Nc,epsilon = 1e-4):
   P_C_i = iterative_approach_soft_clustering(similarity_matrix,T,Nc,epsilon)
+  labels = np.argmax(P_C_i,axis=1)
+  return P_C_i,labels
 
 def GD_method_to_cluster(T,similarity_matrix,N,Nc,epoch,lr=1e-3):
   similarity_matrix = torch.tensor(similarity_matrix)
   loss_array = []
-  P_C_i = GD_train(epoch,N,Nc,T,similarity_matrix,loss_array,lr = 1e-3)
+  P_C_i = GD_train(epoch,N,Nc,T,similarity_matrix,loss_array,lr)
   # draw_loss_function(loss_array)
-  labels = np.argmax(P_C_i,axis=1)
-  return P_C_i.detach().numpy(),labels  
+  labels = torch.argmax(P_C_i,axis=1)
+  return P_C_i.detach().numpy(),labels.detach().numpy()
 
-def evaluate(pred,label,Nc):
-  y_encoded = LabelEncoder().fit_transform(label.to_numpy())
-  labels = np.zeros_like(pred)
-  for i in range(Nc):
-      mask = (pred == i)
-      labels[mask] = mode(y_encoded[mask],keepdims=True)[0][0]
-  accuracy = accuracy_score(y_encoded, labels)
-  return accuracy
+
+def evaluate(pred, label, Nc):
+    y_encoded = LabelEncoder().fit_transform(label.to_numpy())
+    preds = np.zeros_like(pred)
+
+    for i in range(Nc):
+        mask = pred == i
+        if np.any(mask):
+            most_common_label = mode(y_encoded[mask],keepdims=True)[0][0]
+            preds[mask] = most_common_label
+        else:
+            continue
+    accuracy = accuracy_score(y_encoded, preds)
+    return accuracy
   
 def main():
   data,label = load_data()
@@ -217,8 +225,10 @@ def main():
   mutual_info = compute_mutual_information(data)
   GD_P_C_i,GD_pred = GD_method_to_cluster(T_GD,mutual_info,N,Nc,epoch=4000,lr =1e-3)
   iterative_approach_P_C_i,iterative_pred = iterative_approach_to_cluster(T_ia,mutual_info,N,Nc)
-  acc = evaluate(GD_pred,label)
-  print(acc)
+  acc1 = evaluate(GD_pred,label,Nc)
+  acc2 = evaluate(iterative_pred,label,Nc)
+  print(acc1)
+  print(acc2)
 
 
 if __name__ == '__main__':
