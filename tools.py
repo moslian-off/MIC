@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from main import GD_train,compute_entropy,iterative_approach_soft_clustering
+from main import compute_P_C,compute_s_C
 
 def draw(P_C_i,i):
     plt.figure(figsize=(8, 6))
@@ -44,3 +45,13 @@ def iterative_approach_compute_entropy_with_different_T(N,Nc,similarity_matrix,b
     entropy.append(compute_entropy(P_C_i))
   # draw_entropy(entropy,begin,end)
   return entropy
+
+def compute_F(P_C_i,similarity_matrix):
+  P_C = compute_P_C(P_C_i,N)
+  s_C_array = []  
+  for i in range(Nc):
+    s_C = compute_s_C(P_C_i,similarity_matrix,i,N)
+    s_C_array.append(s_C)
+  s_C = np.array(s_C_array)
+  F = np.sum(P_C*s_C) - T*np.sum(P_C_i * np.log2(P_C_i / P_C)) / N
+  return F

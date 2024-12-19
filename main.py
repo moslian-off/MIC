@@ -185,8 +185,8 @@ def GD_method_to_cluster(T,similarity_matrix,N,Nc,epoch,lr=1e-3):
   P_C_i = GD_train(epoch,N,Nc,T,loss_array,lr = 1e-3)
   # draw_loss_function(loss_array)
   labels = np.argmax(P_C_i,axis=1)
-  return P_C_i.detach().numpy(),labels
-  
+  return P_C_i.detach().numpy(),labels  
+
 def main():
   data,label = load_data()
   N,D = data.shape
@@ -201,14 +201,7 @@ def main():
   GD_P_C_i = GD_method_to_cluster(T_GD,mutual_info,N,Nc,epoch=4000,lr =1e-3)
   iterative_approach_P_C_i = iterative_approach_to_cluster(T_ia,mutual_info,N,Nc)
   
-
-
-
-mutual_info = np.loadtxt("temp/normalized_ticket_sij.csv", delimiter=",")
-
-
-P_C_i = np.loadtxt("temp/ticket_opt_P_C_i.csv",delimiter=",")
-
+  
 def draw(P_C_i,i):
     plt.figure(figsize=(8, 6))
     x = np.arange(0, len(P_C_i[i]), 1)
@@ -216,19 +209,10 @@ def draw(P_C_i,i):
     plt.xticks(x)
     plt.show()
     print(np.max(P_C_i[i]))
-    
-draw(P_C_i,0)
 
-# %%
+
 N=496
 Nc = 11
-P_C = compute_P_C(P_C_i,N)
-s_C_array = []
-for i in range(Nc):
-  s_C = compute_s_C(P_C_i,mutual_info,i,N)
-  s_C_array.append(s_C)
-s_C = np.array(s_C_array)
-F = np.sum(P_C*s_C) - T*np.sum(P_C_i * np.log2(P_C_i / P_C)) / N
 
 print(F)
 print(P_C)
