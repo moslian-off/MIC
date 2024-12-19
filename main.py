@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from scipy.sparse import csr_matrix
 from tqdm import tqdm
 import torch
+import matplotlib.pyplot as plt
 
 
 def load_data():
@@ -61,7 +62,7 @@ def to_pij(change_ratio_array):
     
     return result
 
-def MI(pi, pj, pij):
+def compute_mutual_information(pi, pj, pij):
     N = len(pij)
     result = np.zeros((N, N))
     epsilon = 1e-10 
@@ -91,84 +92,25 @@ def normalize(mutual_info):
     normalized_mutual_info = D_prime_matrix @ mutual_info @ D_prime_matrix
     return normalized_mutual_info
 
-def main():
-  change_ratio_array,category = load_data()
-  pi = to_pi(change_ratio_array)
-  pij = to_pij(change_ratio_array)
-  pearson_matrix = np.corrcoef(change_ratio_array)
-  np.savetxt("Pearson_matrix_tickets.txt",pearson_matrix,delimiter=",")
-  mutual_info = MI(pi, pi, pij)
-  mutual_info = normalize(mutual_info)
-
-
-  
-import matplotlib.pyplot as plt
-
-plt.figure(figsize=(8, 6))
-plt.imshow(pearson_matrix)
-plt.colorbar()
-plt.savefig('imgs/pearson_matrix_ticket.png')
-
-
-def draw_pij(i,j):
-    pij_array = np.array(csr_matrix.toarray(pij[i,j]))
-    x = np.arange(min, max+1, 1)
-    y = np.arange(min, max+1, 1)
-
-    xpos, ypos = np.meshgrid(x, y)
-    xpos = xpos.flatten()
-    ypos = ypos.flatten()
-
-    zpos = np.zeros_like(xpos) 
-    dx = dy = 0.4 
-    dz = pij_array.flatten()
-
-    fig = plt.figure(figsize=(10, 6))
-    ax = fig.add_subplot(111, projection='3d')
-
-    ax.bar3d(xpos, ypos, zpos, dx, dy, dz, color='skyblue')
-    plt.show()
-
-draw_pij(0,2)
-
-np.savetxt("temp/ticket_sij.csv",mutual_info,delimiter=",")
-
-plt.figure(figsize=(8, 6))
-plt.imshow(mutual_info)
-plt.colorbar()
-plt.show()
-
-np.savetxt("temp/normalized_ticket_sij.csv",mutual_info,delimiter=",")
-
-# %% [markdown]
-# #### Gradient Descent Method
-
-# %%
-
-# mutual_info = torch.tensor(normalize(pearson_matrix))
-mutual_info = torch.tensor(np.loadtxt("temp/normalized_ticket_sij.csv", delimiter=","))
-# mutual_info = torch.tensor(np.loadtxt("temp/ticket_sij.csv", delimiter=","))
-
-# %%
-def compute_P_C(P):
-    return torch.sum(P,dim=0)/N
-
-def compute_s_C(P, similarity_matrix, C):
-    P_C = compute_P_C(P)
+def compute_P_C(P_C_i,N):
+  if isinstance(P_C_i,torch.tensor):
+    return torch.sum(P_C_i,dim=0)/N
+  return np.sum(P_C_i,axis=0)/N
+    
+def compute_s_C(P, similarity_matrix, C, N):
+    P_C = compute_P_C(P,N)
     P_column = P[:, C]
     norm_factor = P_C[C] ** 2
-    s_C = torch.sum(similarity_matrix * torch.ger(P_column, P_column)) / norm_factor/(N**2)
+    if isinstance(similarity_matrix,torch.tensor):
+      s_C = torch.sum(similarity_matrix * torch.ger(P_column, P_column)) / norm_factor/(N**2)
+    else:
+      s_C = np.sum(similarity_matrix * np.outer(P_column, P_column)) / norm_factor/(N**2)
     return s_C
 
-# %%
-def target_fc(P_C_i_temp, T):  
-    epsilon = 1e-10
-    # P_C_i_normalized = P_C_i / P_C_i.sum(dim=1, keepdims=True).clamp(min=1e-10)
-    # P_C_i = P_C_i_normalized.clamp(min=epsilon)
+def GD_target_fc(P_C_i_temp, T):  
+    N, Nc = P_C_i_temp.shape
     P_C_i = P_C_i_temp/torch.sum(P_C_i_temp,dim = 1,keepdim = True)  
-    P_C = compute_P_C(P_C_i)
-    
-    N, Nc = P_C_i.shape
+    P_C = compute_P_C(P_C_i,N)
     s_C = torch.zeros(Nc)
     for i in range(Nc):
       s_C[i] = compute_s_C(P_C_i, mutual_info, i)
@@ -176,13 +118,16 @@ def target_fc(P_C_i_temp, T):
     info = torch.sum(P_C_i * torch.log2(P_C_i / P_C)) / N
     return -s_all_clusters + T * info
 
-def train(epoch,N,Nc,T,loss_array = None,lr = 1e-3):
+def compute_entropy(P_C_i):
+    return -np.sum(P_C_i * np.log2(P_C_i)) if np.all(P_C_i > 0) else 0
+ 
+def GD_train(epoch,N,Nc,T,loss_array = None,lr = 1e-3):
     P_C_i = torch.rand(N,Nc,requires_grad=True)
     optimizer = torch.optim.Adam([P_C_i],lr)
 
     for i in range(epoch):
         optimizer.zero_grad()
-        loss = target_fc(P_C_i,T)
+        loss = GD_target_fc(P_C_i,T)
         loss.backward()
         optimizer.step()
         print(f"Epoch:{i}, loss:{loss.item()}")
@@ -192,81 +137,7 @@ def train(epoch,N,Nc,T,loss_array = None,lr = 1e-3):
       loss_array = np.array(loss_array)
     return torch.softmax(P_C_i,dim=1)
 
-# %%
-T = 1/60
-Nc = 11
-N = 496
-     
-import copy
-
-loss_array = []    
-P_C_i = train(5000,N,Nc,T,loss_array,lr=1e-2)
-
-np.savetxt("temp/ticket_opt_P_C_i.csv",P_C_i.detach().numpy(),delimiter=",")
-
-# %%
-import matplotlib.pyplot as plt
-
-x = np.arange(0,5000,1)
-plt.plot(x,loss_array)
-plt.ylabel("target")
-plt.savefig("imgs/ticket_loss.png")
-P_C = compute_P_C(P_C_i)
-P_C
-
-# %%
-P_C_i = np.loadtxt("temp/ticket_opt_P_C_i.csv",delimiter=",")
-
-def draw(P_C_i,i):
-    plt.figure(figsize=(8, 6))
-    x = np.arange(0, len(P_C_i[i]), 1)
-    plt.bar(x, P_C_i[i], width=0.8, color='skyblue', align='center')
-    plt.xticks(x)
-    plt.show()
-    print(np.max(P_C_i[i]))
-    
-draw(P_C_i,0)
-
-# %%
-# entropy = []
-
-# def compute_entropy(P_C_i):
-#     return -np.sum(P_C_i * np.log2(P_C_i)) if np.all(P_C_i > 0) else 0
- 
-# for t in range(75,90,1):
-#   temp_PCI = train(40000,N,Nc,1.0/t,loss_array,lr=5e-4)
-#   entropy.append(compute_entropy(temp_PCI.detach().numpy()))
- 
-  
-# plt.figure(figsize=(8, 6))
-# X = np.arange(75,90,1)
-# plt.plot(X, entropy) 
-# plt.xticks(X)
-# plt.show()
-
-# %%
-labels = np.argmax(P_C_i,axis=1)
-
-# %% [markdown]
-# #### Iterative Approach
-
-# %%
-import numpy as np
-
-mutual_info = np.loadtxt("temp/normalized_ticket_sij.csv", delimiter=",")
-
-# %%
-def compute_P_C(P, N):
-    return np.sum(P,axis=0)/N
-
-def compute_s_C(P, similarity_matrix, C, N):
-    P_C = compute_P_C(P, N)
-    P_column = P[:, C]
-    norm_factor = (P_C[C] * N) ** 2
-    s_C = np.sum(similarity_matrix * np.outer(P_column, P_column)) / norm_factor
-    return s_C
-    
-def compute_s_C_i(P, similarity_matrix, C, i, N):
+def iterative_approach_compute_s_C_i(P, similarity_matrix, C, i, N):
     P_C = compute_P_C(P, N)
     s_C_i = 0
     for j in range(N):
@@ -274,7 +145,7 @@ def compute_s_C_i(P, similarity_matrix, C, i, N):
     s_C_i /= (P_C[C]*N)
     return s_C_i
 
-def soft_clustering(similarity_matrix, T, Nc, epsilon):
+def iterative_approach_soft_clustering(similarity_matrix, T, Nc, epsilon):
     N = similarity_matrix.shape[0]
     np.random.seed(42)
     P = np.random.rand(N, Nc)
@@ -288,7 +159,7 @@ def soft_clustering(similarity_matrix, T, Nc, epsilon):
           s_C = compute_s_C(P, similarity_matrix, C, N)
           s_C_i = np.zeros(N)
           for i in range(N):
-              s_C_i[i] = compute_s_C_i(P, similarity_matrix, C, i, N)  
+              s_C_i[i] = iterative_approach_compute_s_C_i(P, similarity_matrix, C, i, N)  
           exponent = (1 / T) * (2 * s_C_i - s_C)
           P_new[:,C] = P_C[C] * np.exp(exponent)
         # Normalize P_new
@@ -305,17 +176,37 @@ def soft_clustering(similarity_matrix, T, Nc, epsilon):
 
     return P
 
-# %%
-T = 1.0/60
-Nc = 11
-N = 496
-epsilon = 1e-5
+def iterative_approach_to_cluster(T,similarity_matrix,N,Nc,epsilon = 1e-4):
+  P_C_i = iterative_approach_soft_clustering(similarity_matrix,T,Nc,epsilon)
 
-P_C_i = soft_clustering(mutual_info,T,Nc,epsilon)
+def GD_method_to_cluster(T,similarity_matrix,N,Nc,epoch,lr=1e-3):
+  similarity_matrix = torch.tensor(similarity_matrix)
+  loss_array = []
+  P_C_i = GD_train(epoch,N,Nc,T,loss_array,lr = 1e-3)
+  # draw_loss_function(loss_array)
+  labels = np.argmax(P_C_i,axis=1)
+  return P_C_i.detach().numpy(),labels
+  
+def main():
+  data,label = load_data()
+  N,D = data.shape
+  Nc = 11
+  T_GD = 1/60
+  T_ia = 1/60
+  pi = to_pi(data)
+  pij = to_pij(data)
+  pearson_matrix = np.corrcoef(data)
+  mutual_info = compute_mutual_information(pi, pi, pij)
+  mutual_info = normalize(mutual_info)
+  GD_P_C_i = GD_method_to_cluster(T_GD,mutual_info,N,Nc,epoch=4000,lr =1e-3)
+  iterative_approach_P_C_i = iterative_approach_to_cluster(T_ia,mutual_info,N,Nc)
+  
 
-np.savetxt("temp/ticket_opt_P_C_i.csv",P_C_i,delimiter=",")
 
-# %%
+
+mutual_info = np.loadtxt("temp/normalized_ticket_sij.csv", delimiter=",")
+
+
 P_C_i = np.loadtxt("temp/ticket_opt_P_C_i.csv",delimiter=",")
 
 def draw(P_C_i,i):
@@ -345,13 +236,7 @@ print(P_C)
 # %%
 entropy = []
 
-def compute_entropy(P_C_i):
-    return -np.sum(P_C_i * np.log2(P_C_i)) if np.all(P_C_i > 0) else 0
   
-for t in range(40,80):
-  P_C_i = soft_clustering(mutual_info,1/t,Nc,1e-4)
-  draw(P_C_i,0)
-  entropy.append(compute_entropy(P_C_i))
 
 plt.figure(figsize=(8, 6))
 X = np.arange(40,80,1)

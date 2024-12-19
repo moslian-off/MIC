@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from main import GD_train,compute_entropy,iterative_approach_soft_clustering
 
 def draw(P_C_i,i):
     plt.figure(figsize=(8, 6))
@@ -27,3 +28,19 @@ def draw_pij(i,j):
 
     ax.bar3d(xpos, ypos, zpos, dx, dy, dz, color='skyblue')
     plt.show()
+    
+def GD_compute_entropy_with_different_T(N,Nc):
+  entropy = []
+  loss_array = []
+  for t in range(75,90,1):
+    temp_P_C_i = GD_train(4000,N,Nc,1.0/t,loss_array,lr=5e-4)
+    entropy.append(compute_entropy(temp_P_C_i.detach().numpy()))
+  return entropy
+
+def iterative_approach_compute_entropy_with_different_T(N,Nc,similarity_matrix,begin,end):
+  entropy = []
+  for t in range(begin,end):
+    P_C_i = iterative_approach_soft_clustering(similarity_matrix,1/t,Nc,1e-4)
+    entropy.append(compute_entropy(P_C_i))
+  # draw_entropy(entropy,begin,end)
+  return entropy
